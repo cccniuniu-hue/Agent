@@ -96,7 +96,7 @@ public class MindBridgeProperties {
         /** 本地模型服务地址。 */
         private String baseUrl = "http://localhost:11434";
         /** MindBridge 项目模型名称。 */
-        private String model = "mindbridge-qwen2.5-7b-ft:latest";
+        private String model = "qwen2.5:7b";
 
         public String getBaseUrl() {
             return baseUrl;

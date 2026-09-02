@@ -5,7 +5,7 @@ const state = {
   },
   sessionId: null,
   sending: false,
-  modelName: "mindbridge-qwen2.5-7b-ft:latest",
+  modelName: "qwen2.5:7b",
   isAdmin: false
 };
 

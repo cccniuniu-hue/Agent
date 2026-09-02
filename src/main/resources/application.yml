@@ -92,7 +92,7 @@ mindbridge:
     max-tokens: ${AI_MAX_TOKENS:512}
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model: ${OLLAMA_MODEL:mindbridge-qwen2.5-7b-ft:latest}
+      model: ${OLLAMA_MODEL:qwen2.5:7b}
     openai:
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       api-key: ${OPENAI_API_KEY:}

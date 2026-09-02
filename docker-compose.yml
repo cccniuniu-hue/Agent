@@ -17,7 +17,7 @@ services:
       REDIS_PORT: 6379
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-mindbridge-qwen2.5-7b-ft:latest}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
       USE_CHROMA: ${USE_CHROMA:-true}
       CHROMA_BASE_URL: http://chroma:8000
       MEMORY_USE_CHROMA: ${MEMORY_USE_CHROMA:-true}
