@@ -1,0 +1,58 @@
+package com.mindbridge.agent.service.agent;
+
+import com.mindbridge.agent.domain.ChatSession;
+import com.mindbridge.agent.domain.UserAccount;
+import java.util.List;
+import org.springframework.stereotype.Service;
+
+/**
+ * MindBridge Agent Loop 运行时。
+ *
+ * <p>每轮学生输入都会进入有限步循环：读取记忆、主控路由、知识检索、风险守护和回复规划。
+ * 这里不是无限自主循环，而是受步数限制的安全 agent loop，适合心理安全场景。</p>
+ */
+@Service
+public class AgentRuntimeService {
+
+    private static final int MAX_STEPS = 8;
+
+    private final List<MindBridgeAgent> agents;
+
+    public AgentRuntimeService(
+            MemoryAgent memoryAgent,
+            SupervisorAgent supervisorAgent,
+            KnowledgeAgent knowledgeAgent,
+            RiskGuardianAgent riskGuardianAgent,
+            CompanionAgent companionAgent,
+            CounselorAgent counselorAgent
+    ) {
+        // 顺序就是 Supervisor 架构下的协作优先级；每个 Agent 通过 supports 判断是否该接手。
+        this.agents = List.of(
+                memoryAgent,
+                supervisorAgent,
+                knowledgeAgent,
+                riskGuardianAgent,
+                companionAgent,
+                counselorAgent);
+    }
+
+    public AgentRunResult run(UserAccount user, ChatSession session, String originalInput, String modelInput) {
+        AgentContext context = new AgentContext(user, session, originalInput, modelInput);
+        for (int step = 1; step <= MAX_STEPS && !context.finished(); step++) {
+            MindBridgeAgent agent = nextAgent(context);
+            AgentDecision decision = agent.act(context);
+            context.addStep(AgentStep.of(step, agent.name(), decision));
+            if (decision.complete()) {
+                context.finish();
+            }
+        }
+        return AgentRunResult.from(context);
+    }
+
+    private MindBridgeAgent nextAgent(AgentContext context) {
+        return agents.stream()
+                .filter(agent -> agent.supports(context))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No agent can handle current context."));
+    }
+}

@@ -1,0 +1,139 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: mindbridge-agent
+  ai:
+    mcp:
+      server:
+        enabled: ${MCP_SERVER_ENABLED:true}
+        name: mindbridge-mcp-server
+        version: 0.1.0
+        type: SYNC
+        instructions: "MindBridge MCP server exposes psychological report archival and high-risk alert tools."
+        sse-endpoint: ${MCP_SERVER_SSE_ENDPOINT:/sse}
+        sse-message-endpoint: ${MCP_SERVER_MESSAGE_ENDPOINT:/mcp/messages}
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+      client:
+        enabled: ${MCP_CLIENT_ENABLED:false}
+        initialized: ${MCP_CLIENT_INITIALIZED:true}
+        name: mindbridge-mcp-client
+        version: 0.1.0
+        type: SYNC
+        request-timeout: ${MCP_CLIENT_REQUEST_TIMEOUT:20s}
+        sse:
+          connections:
+            mindbridge-tools:
+              url: ${MCP_SERVER_URL:http://localhost:${SERVER_PORT:8080}}
+              sse-endpoint: ${MCP_SERVER_SSE_ENDPOINT:/sse}
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/mindbridge;MODE=MySQL;DATABASE_TO_LOWER=TRUE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:2s}
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
+            required: ${MAIL_SMTP_STARTTLS_REQUIRED:false}
+          ssl:
+            enable: ${MAIL_SMTP_SSL_ENABLE:false}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:10000}
+          timeout: ${MAIL_SMTP_TIMEOUT:10000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:10000}
+
+logging:
+  level:
+    root: INFO
+
+management:
+  health:
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+mindbridge:
+  ai:
+    provider: ${AI_PROVIDER:ollama}
+    temperature: ${AI_TEMPERATURE:0.35}
+    max-tokens: ${AI_MAX_TOKENS:512}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${OLLAMA_MODEL:mindbridge-qwen2.5-7b-ft:latest}
+    openai:
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      api-key: ${OPENAI_API_KEY:}
+      model: ${OPENAI_MODEL:gpt-4o-mini}
+  chat:
+    history-limit: ${CHAT_HISTORY_LIMIT:10}
+    short-memory-ttl-hours: ${CHAT_SHORT_MEMORY_TTL_HOURS:24}
+  memory:
+    use-chroma: ${MEMORY_USE_CHROMA:${USE_CHROMA:true}}
+    chroma-base-url: ${MEMORY_CHROMA_BASE_URL:${CHROMA_BASE_URL:http://localhost:8000}}
+    chroma-collection: ${MEMORY_CHROMA_COLLECTION:mindbridge_user_memory}
+    top-k: ${MEMORY_TOP_K:6}
+  embedding:
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  knowledge:
+    top-k: ${RAG_TOP_K:4}
+    reranker-enabled: ${RAG_RERANKER_ENABLED:true}
+    reranker-candidate-limit: ${RAG_RERANKER_CANDIDATE_LIMIT:20}
+    reranker-max-content-chars: ${RAG_RERANKER_MAX_CONTENT_CHARS:700}
+    use-chroma: ${USE_CHROMA:true}
+    chroma-base-url: ${CHROMA_BASE_URL:http://localhost:8000}
+    chroma-collection: ${CHROMA_COLLECTION:mindbridge_knowledge}
+    chunk-size: ${KNOWLEDGE_CHUNK_SIZE:512}
+    chunk-overlap: ${KNOWLEDGE_CHUNK_OVERLAP:64}
+  rag-eval:
+    enabled: ${RAG_EVAL_ENABLED:false}
+    dataset: ${RAG_EVAL_DATASET:classpath:rag-eval/mindbridge-rag-eval.json}
+    top-k: ${RAG_EVAL_TOP_K:4}
+    exit-after-run: ${RAG_EVAL_EXIT_AFTER_RUN:false}
+    output-path: ${RAG_EVAL_OUTPUT_PATH:target/rag-eval-report.json}
+  mcp:
+    excel:
+      mode: ${MCP_EXCEL_MODE:local}
+      url: ${MCP_EXCEL_URL:http://localhost:8081}
+      local-path: ${MCP_EXCEL_LOCAL_PATH:./data/mindbridge-reports.xlsx}
+    email:
+      mode: ${MCP_EMAIL_MODE:log}
+      url: ${MCP_EMAIL_URL:http://localhost:8082}
+      from: ${ALERT_MAIL_FROM:mindbridge-alerts@example.com}
+      recipients: ${ALERT_MAIL_RECIPIENTS:counselor-alerts@example.com}
+      max-retries: ${ALERT_MAIL_MAX_RETRIES:2}
+      mcp-server-delivery-mode: ${MCP_EMAIL_SERVER_DELIVERY_MODE:log}
