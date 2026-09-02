@@ -11,7 +11,7 @@ MindBridge 是一个校园心理健康智能体
 - 可替换知识库：默认本地轻量检索，可打开 Chroma 镜像和查询。
 - 多 Agent loop：每轮输入由 MemoryAgent、SupervisorAgent、KnowledgeAgent、RiskGuardianAgent 和回复 Agent 协作完成
 
-大模型 LoRA 微调、合并、GGUF 转换和 Ollama 接入流程见：[docs/qwen25-7b-lora-finetune-guide.md](docs/qwen25-7b-lora-finetune-guide.md)。
+项目默认直接使用官方 Ollama 模型 `qwen2.5:7b`，不再依赖本地微调模型。
 
 ## 目录
 
@@ -84,16 +84,15 @@ docker compose version
 
 ### 2. 本地快速运行（适合开发与演示）
 
-默认模型名为 `mindbridge-qwen2.5-7b-ft:latest`。首次使用前，将 GGUF 权重放到下列位置：
-
-```text
-models/mindbridge-qwen2.5-7b-ft/mindbridge-qwen2.5-7b-ft-q4_k_m.gguf
-```
-
-然后创建 Ollama 模型并启动项目：
+默认模型名为 `qwen2.5:7b`。首次使用前拉取官方模型：
 
 ```bash
-./scripts/create-finetuned-model.sh
+ollama pull qwen2.5:7b
+```
+
+然后启动项目：
+
+```bash
 ./scripts/run-dev.sh
 ```
 
@@ -135,7 +134,7 @@ mvn -Dmaven.repo.local=.m2/repository clean package
 ```bash
 AI_PROVIDER=ollama \
 OLLAMA_BASE_URL=http://127.0.0.1:11434 \
-OLLAMA_MODEL=mindbridge-qwen2.5-7b-ft:latest \
+OLLAMA_MODEL=qwen2.5:7b \
 java -jar target/mindbridge-agent-0.1.0.jar \
   --server.address=127.0.0.1 \
   --server.port=8080
@@ -199,7 +198,7 @@ docker compose down
 | `SERVER_PORT` | `8080` | 应用端口 |
 | `AI_PROVIDER` | `ollama` | `ollama` 或 `openai` |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 地址 |
-| `OLLAMA_MODEL` | `mindbridge-qwen2.5-7b-ft:latest` | Ollama 模型名 |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama 模型名 |
 | `OPENAI_API_KEY` | 空 | OpenAI 密钥 |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI 模型名 |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 见配置文件 | 数据库连接 |
@@ -289,28 +288,22 @@ curl -u admin:admin123 \
   http://localhost:8080/api/admin/knowledge
 ```
 
-## 接入 Ollama / LoRA 模型
+## 接入 Ollama 模型
 
 默认模型配置就是本地 Ollama 路线，模型名为：
 
 ```text
-mindbridge-qwen2.5-7b-ft:latest
+qwen2.5:7b
 ```
 
-本地模型由这个 GGUF 权重创建：
-
-```text
-models/mindbridge-qwen2.5-7b-ft/mindbridge-qwen2.5-7b-ft-q4_k_m.gguf
-```
-
-首次运行或重新导入模型时执行：
+首次使用前拉取官方模型：
 
 ```bash
 cd MindBridge
-./scripts/create-finetuned-model.sh
+ollama pull qwen2.5:7b
 ```
 
-之后直接启动项目：
+然后直接启动项目：
 
 ```bash
 cd MindBridge
@@ -325,7 +318,7 @@ cd MindBridge
 cd MindBridge
 AI_PROVIDER=ollama \
 OLLAMA_BASE_URL=http://localhost:11434 \
-OLLAMA_MODEL=mindbridge-qwen2.5-7b-ft:latest \
+OLLAMA_MODEL=qwen2.5:7b \
 JAVA_HOME="$PWD/.tools/amazon-corretto-17.jdk/Contents/Home" \
   .tools/apache-maven-3.9.9/bin/mvn -Dmaven.repo.local=.m2/repository spring-boot:run
 ```
@@ -408,7 +401,7 @@ Java 输入报告包含每条样本的：
 SPRING_MAIN_WEB_APPLICATION_TYPE=none \
 AI_PROVIDER=ollama \
 OLLAMA_BASE_URL=http://localhost:11434 \
-OLLAMA_MODEL=mindbridge-qwen2.5-7b-ft:latest \
+OLLAMA_MODEL=qwen2.5:7b \
 USE_CHROMA=false \
 RAG_EVAL_ENABLED=true \
 RAG_EVAL_EXIT_AFTER_RUN=true \
