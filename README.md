@@ -11,7 +11,7 @@ MindBridge 是一个校园心理健康智能体
 - 可替换知识库：默认本地轻量检索，可打开 Chroma 镜像和查询。
 - 多 Agent loop：每轮输入由 MemoryAgent、SupervisorAgent、KnowledgeAgent、RiskGuardianAgent 和回复 Agent 协作完成
 
-项目默认直接使用官方 Ollama 模型 `qwen2.5:7b`，不再依赖本地微调模型。
+项目默认直接使用官方 Ollama 模型 `qwen2.5:7b`。
 
 ## 目录
 
