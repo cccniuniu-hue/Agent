@@ -1,6 +1,6 @@
-# MindBridge Agent
+# 多agent心理护航智能体
 
-MindBridge 是一个校园心理健康智能体
+
 
 - 动态路由 RAG：先识别 `CHAT / CONSULT / RISK`，闲聊不查知识库，咨询与风险消息才进入检索增强。
 - SSE 流式输出：`/api/chat/stream` 返回 `text/event-stream`，适合前端做打字机效果。
