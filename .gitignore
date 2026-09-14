@@ -8,3 +8,13 @@ data/
 logs/
 .DS_Store
 *.log
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.safetensors
+*.gguf
+*.pt
+*.pth
