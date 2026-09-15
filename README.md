@@ -204,6 +204,7 @@ docker compose down
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 见配置文件 | 数据库连接 |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis 连接 |
 | `USE_CHROMA` | `true` | 是否使用 Chroma 知识检索 |
+| `CHROMA_TENANT` / `CHROMA_DATABASE` | `default_tenant` / `default_database` | Chroma v2 租户和数据库 |
 | `MCP_EMAIL_MODE` | `log` | `log`、`smtp`、`http` 或 `mcp` |
 
 更多模型、MySQL、Chroma、SMTP 和 MCP 参数见本文档后续同名章节。不要将 API Key 或真实密码提交到代码仓库。

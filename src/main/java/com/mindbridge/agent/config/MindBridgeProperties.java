@@ -257,6 +257,8 @@ public class MindBridgeProperties {
         /** 是否启用外部 Chroma 向量库。 */
         private boolean useChroma;
         private String chromaBaseUrl = "http://localhost:8000";
+        private String chromaTenant = "default_tenant";
+        private String chromaDatabase = "default_database";
         private String chromaCollection = "mindbridge_knowledge";
         private int chunkSize = 512;
         private int chunkOverlap = 64;
@@ -307,6 +309,22 @@ public class MindBridgeProperties {
 
         public void setChromaBaseUrl(String chromaBaseUrl) {
             this.chromaBaseUrl = chromaBaseUrl;
+        }
+
+        public String getChromaTenant() {
+            return chromaTenant;
+        }
+
+        public void setChromaTenant(String chromaTenant) {
+            this.chromaTenant = chromaTenant;
+        }
+
+        public String getChromaDatabase() {
+            return chromaDatabase;
+        }
+
+        public void setChromaDatabase(String chromaDatabase) {
+            this.chromaDatabase = chromaDatabase;
         }
 
         public String getChromaCollection() {

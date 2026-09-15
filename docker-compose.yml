@@ -20,6 +20,8 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
       USE_CHROMA: ${USE_CHROMA:-true}
       CHROMA_BASE_URL: http://chroma:8000
+      CHROMA_TENANT: ${CHROMA_TENANT:-default_tenant}
+      CHROMA_DATABASE: ${CHROMA_DATABASE:-default_database}
       MEMORY_USE_CHROMA: ${MEMORY_USE_CHROMA:-true}
       MEMORY_CHROMA_BASE_URL: http://chroma:8000
       MEMORY_CHROMA_COLLECTION: ${MEMORY_CHROMA_COLLECTION:-mindbridge_user_memory}
@@ -56,7 +58,7 @@ services:
       - redis-data:/data
 
   chroma:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.9
     container_name: mindbridge-chroma
     ports:
       - "8000:8000"

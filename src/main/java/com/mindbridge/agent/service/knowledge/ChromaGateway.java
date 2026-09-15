@@ -17,9 +17,12 @@ import org.springframework.web.reactive.function.client.WebClient;
  */
 public class ChromaGateway {
 
+    private static final String COLLECTIONS_PATH =
+            "/api/v2/tenants/{tenant}/databases/{database}/collections";
+
     private final MindBridgeProperties properties;
     private final WebClient webClient;
-    private volatile boolean collectionEnsured;
+    private volatile String collectionId;
 
     public ChromaGateway(MindBridgeProperties properties, WebClient.Builder webClientBuilder) {
         this.properties = properties;
@@ -31,7 +34,10 @@ public class ChromaGateway {
             return;
         }
         // 本地数据库仍是主存储；Chroma 只是可选检索加速层。
-        ensureCollection();
+        String ensuredCollectionId = ensureCollection();
+        if (ensuredCollectionId == null) {
+            return;
+        }
         Map<String, Object> body = Map.of(
                 "ids", List.of(String.valueOf(chunk.getId())),
                 "documents", List.of(chunk.getContent()),
@@ -40,7 +46,10 @@ public class ChromaGateway {
                         "sourceIndex", chunk.getSourceIndex()))
         );
         webClient.post()
-                .uri("/api/v1/collections/{collection}/add", properties.getKnowledge().getChromaCollection())
+                .uri(COLLECTIONS_PATH + "/{collectionId}/upsert",
+                        properties.getKnowledge().getChromaTenant(),
+                        properties.getKnowledge().getChromaDatabase(),
+                        ensuredCollectionId)
                 .bodyValue(body)
                 .retrieve()
                 .toBodilessEntity()
@@ -52,7 +61,10 @@ public class ChromaGateway {
         if (!properties.getKnowledge().isUseChroma()) {
             return List.of();
         }
-        ensureCollection();
+        String ensuredCollectionId = ensureCollection();
+        if (ensuredCollectionId == null) {
+            return List.of();
+        }
         Map<String, Object> body = Map.of(
                 "query_texts", List.of(text),
                 "n_results", topK,
@@ -60,7 +72,10 @@ public class ChromaGateway {
         );
         try {
             JsonNode response = webClient.post()
-                    .uri("/api/v1/collections/{collection}/query", properties.getKnowledge().getChromaCollection())
+                    .uri(COLLECTIONS_PATH + "/{collectionId}/query",
+                            properties.getKnowledge().getChromaTenant(),
+                            properties.getKnowledge().getChromaDatabase(),
+                            ensuredCollectionId)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
@@ -76,10 +91,16 @@ public class ChromaGateway {
         if (!properties.getKnowledge().isUseChroma()) {
             return;
         }
-        ensureCollection();
+        String ensuredCollectionId = ensureCollection();
+        if (ensuredCollectionId == null) {
+            return;
+        }
         Map<String, Object> body = Map.of("where", Map.of("source", source));
         webClient.post()
-                .uri("/api/v1/collections/{collection}/delete", properties.getKnowledge().getChromaCollection())
+                .uri(COLLECTIONS_PATH + "/{collectionId}/delete",
+                        properties.getKnowledge().getChromaTenant(),
+                        properties.getKnowledge().getChromaDatabase(),
+                        ensuredCollectionId)
                 .bodyValue(body)
                 .retrieve()
                 .toBodilessEntity()
@@ -113,20 +134,29 @@ public class ChromaGateway {
         }
     }
 
-    private void ensureCollection() {
-        if (collectionEnsured) {
-            return;
+    private synchronized String ensureCollection() {
+        if (collectionId != null) {
+            return collectionId;
         }
         try {
-            webClient.post()
-                    .uri("/api/v1/collections")
-                    .bodyValue(Map.of("name", properties.getKnowledge().getChromaCollection()))
+            JsonNode response = webClient.post()
+                    .uri(COLLECTIONS_PATH,
+                            properties.getKnowledge().getChromaTenant(),
+                            properties.getKnowledge().getChromaDatabase())
+                    .bodyValue(Map.of(
+                            "name", properties.getKnowledge().getChromaCollection(),
+                            "get_or_create", true))
                     .retrieve()
-                    .toBodilessEntity()
-                    .onErrorComplete()
+                    .bodyToMono(JsonNode.class)
                     .block();
-        } finally {
-            collectionEnsured = true;
+            String resolvedId = response == null ? null : response.path("id").asText(null);
+            if (resolvedId == null || resolvedId.isBlank()) {
+                return null;
+            }
+            collectionId = resolvedId;
+            return resolvedId;
+        } catch (Exception ignored) {
+            return null;
         }
     }
 }

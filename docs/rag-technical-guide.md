@@ -273,13 +273,15 @@ cosine(a, b) = dot(a, b) / (||a|| * ||b||)
 | --- | --- |
 | `USE_CHROMA` | `true` |
 | `CHROMA_BASE_URL` | `http://localhost:8000` |
+| `CHROMA_TENANT` | `default_tenant` |
+| `CHROMA_DATABASE` | `default_database` |
 | `CHROMA_COLLECTION` | `mindbridge_knowledge` |
 
 Docker Compose 中 Chroma 服务为：
 
 ```yaml
 chroma:
-  image: chromadb/chroma:latest
+  image: chromadb/chroma:1.5.9
   ports:
     - "8000:8000"
   volumes:
@@ -293,6 +295,8 @@ chroma:
 - `ids`：chunk id。
 - `documents`：chunk 文本。
 - `metadatas`：`source` 和 `sourceIndex`。
+
+网关通过 Chroma v2 API 创建或获取 collection，缓存响应中的 collection UUID，后续使用该 UUID 调用 `upsert`、`query` 和 `delete`。创建失败时不缓存失败结果，下次请求会重新尝试。
 
 当前代码没有向 Chroma 显式传入 embedding 数组，而是传入 documents。也就是说，Chroma 侧的向量化行为取决于 Chroma 服务端默认或实际配置的 embedding function。与此同时，项目自己的 `embeddingJson` 仍保存在数据库里，用于本地向量兜底。
 
@@ -932,7 +936,7 @@ query=危机安全计划 自伤 即时危险; refined=true; retrieved=4
 排查：
 
 ```bash
-curl http://localhost:8000/api/v1/heartbeat
+curl http://localhost:8000/api/v2/heartbeat
 ```
 
 #### 上传知识后检索不到
