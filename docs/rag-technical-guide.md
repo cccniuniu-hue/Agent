@@ -705,11 +705,11 @@ aiClient.stream(prepared.messages())
 
 1. 每轮对话后，`UserProfileMemoryService.rememberUserInput()` 尝试抽取长期记忆候选。
 2. 记忆保存到数据库，并可镜像到 Chroma。
-3. 下一轮对话中，`profileBrief(user, currentInput)` 用当前输入召回相关画像。
+3. 网关通过 Chroma v2 API 获取 collection UUID，使用 `upsert` 写入；下一轮对话中，`profileBrief(user, currentInput)` 用当前输入召回相关画像。
 4. 如果 Chroma 不可用，则回退到最近更新的 12 条用户记忆。
 5. MemoryAgent 将画像摘要和短期历史摘要合并，交给后续 Agent。
 
-因此，用户画像召回不是公共知识检索，而是个性化上下文检索。
+查询请求始终携带当前账号的 `userId` 元数据条件，避免返回其他用户的画像。用户画像召回不是公共知识检索，而是个性化上下文检索。
 
 ## 16. 配置说明
 
@@ -742,6 +742,8 @@ aiClient.stream(prepared.messages())
 | --- | --- | --- |
 | `MEMORY_USE_CHROMA` | `${USE_CHROMA:true}` | 是否启用用户画像 Chroma 召回 |
 | `MEMORY_CHROMA_BASE_URL` | `${CHROMA_BASE_URL:http://localhost:8000}` | 用户画像 Chroma 地址 |
+| `MEMORY_CHROMA_TENANT` | `${CHROMA_TENANT:default_tenant}` | 用户画像所在 Chroma 租户 |
+| `MEMORY_CHROMA_DATABASE` | `${CHROMA_DATABASE:default_database}` | 用户画像所在 Chroma 数据库 |
 | `MEMORY_CHROMA_COLLECTION` | `mindbridge_user_memory` | 用户画像 collection |
 | `MEMORY_TOP_K` | `6` | 每轮召回画像数量 |
 

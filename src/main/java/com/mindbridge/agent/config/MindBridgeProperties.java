@@ -175,6 +175,8 @@ public class MindBridgeProperties {
         /** 是否启用 Chroma 作为用户画像长期记忆的语义索引。 */
         private boolean useChroma;
         private String chromaBaseUrl = "http://localhost:8000";
+        private String chromaTenant = "default_tenant";
+        private String chromaDatabase = "default_database";
         private String chromaCollection = "mindbridge_user_memory";
         /** 每轮按当前输入召回的画像记忆数量。 */
         private int topK = 6;
@@ -193,6 +195,22 @@ public class MindBridgeProperties {
 
         public void setChromaBaseUrl(String chromaBaseUrl) {
             this.chromaBaseUrl = chromaBaseUrl;
+        }
+
+        public String getChromaTenant() {
+            return chromaTenant;
+        }
+
+        public void setChromaTenant(String chromaTenant) {
+            this.chromaTenant = chromaTenant;
+        }
+
+        public String getChromaDatabase() {
+            return chromaDatabase;
+        }
+
+        public void setChromaDatabase(String chromaDatabase) {
+            this.chromaDatabase = chromaDatabase;
         }
 
         public String getChromaCollection() {

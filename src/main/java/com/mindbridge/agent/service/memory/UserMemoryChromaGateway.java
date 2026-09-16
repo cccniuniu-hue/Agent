@@ -20,9 +20,12 @@ import org.springframework.web.reactive.function.client.WebClient;
  */
 public class UserMemoryChromaGateway {
 
+    private static final String COLLECTIONS_PATH =
+            "/api/v2/tenants/{tenant}/databases/{database}/collections";
+
     private final MindBridgeProperties properties;
     private final WebClient webClient;
-    private volatile boolean collectionEnsured;
+    private volatile String collectionId;
 
     public UserMemoryChromaGateway(MindBridgeProperties properties, WebClient.Builder webClientBuilder) {
         this.properties = properties;
@@ -33,15 +36,20 @@ public class UserMemoryChromaGateway {
         if (!properties.getMemory().isUseChroma() || item.getId() == null) {
             return;
         }
-        ensureCollection();
-        delete(item.getId());
+        String ensuredCollectionId = ensureCollection();
+        if (ensuredCollectionId == null) {
+            return;
+        }
         Map<String, Object> body = Map.of(
                 "ids", List.of(chromaId(item.getId())),
                 "documents", List.of(document(item)),
                 "metadatas", List.of(metadata(item))
         );
         webClient.post()
-                .uri("/api/v1/collections/{collection}/add", properties.getMemory().getChromaCollection())
+                .uri(COLLECTIONS_PATH + "/{collectionId}/upsert",
+                        properties.getMemory().getChromaTenant(),
+                        properties.getMemory().getChromaDatabase(),
+                        ensuredCollectionId)
                 .bodyValue(body)
                 .retrieve()
                 .toBodilessEntity()
@@ -53,7 +61,10 @@ public class UserMemoryChromaGateway {
         if (!properties.getMemory().isUseChroma() || userId == null || text == null || text.isBlank()) {
             return List.of();
         }
-        ensureCollection();
+        String ensuredCollectionId = ensureCollection();
+        if (ensuredCollectionId == null) {
+            return List.of();
+        }
         Map<String, Object> body = Map.of(
                 "query_texts", List.of(text),
                 "n_results", Math.max(1, topK),
@@ -62,7 +73,10 @@ public class UserMemoryChromaGateway {
         );
         try {
             JsonNode response = webClient.post()
-                    .uri("/api/v1/collections/{collection}/query", properties.getMemory().getChromaCollection())
+                    .uri(COLLECTIONS_PATH + "/{collectionId}/query",
+                            properties.getMemory().getChromaTenant(),
+                            properties.getMemory().getChromaDatabase(),
+                            ensuredCollectionId)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
@@ -77,9 +91,15 @@ public class UserMemoryChromaGateway {
         if (!properties.getMemory().isUseChroma() || memoryId == null) {
             return;
         }
-        ensureCollection();
+        String ensuredCollectionId = ensureCollection();
+        if (ensuredCollectionId == null) {
+            return;
+        }
         webClient.post()
-                .uri("/api/v1/collections/{collection}/delete", properties.getMemory().getChromaCollection())
+                .uri(COLLECTIONS_PATH + "/{collectionId}/delete",
+                        properties.getMemory().getChromaTenant(),
+                        properties.getMemory().getChromaDatabase(),
+                        ensuredCollectionId)
                 .bodyValue(Map.of("ids", List.of(chromaId(memoryId))))
                 .retrieve()
                 .toBodilessEntity()
@@ -135,20 +155,29 @@ public class UserMemoryChromaGateway {
         }
     }
 
-    private void ensureCollection() {
-        if (collectionEnsured) {
-            return;
+    private synchronized String ensureCollection() {
+        if (collectionId != null) {
+            return collectionId;
         }
         try {
-            webClient.post()
-                    .uri("/api/v1/collections")
-                    .bodyValue(Map.of("name", properties.getMemory().getChromaCollection()))
+            JsonNode response = webClient.post()
+                    .uri(COLLECTIONS_PATH,
+                            properties.getMemory().getChromaTenant(),
+                            properties.getMemory().getChromaDatabase())
+                    .bodyValue(Map.of(
+                            "name", properties.getMemory().getChromaCollection(),
+                            "get_or_create", true))
                     .retrieve()
-                    .toBodilessEntity()
-                    .onErrorComplete()
+                    .bodyToMono(JsonNode.class)
                     .block();
-        } finally {
-            collectionEnsured = true;
+            String resolvedId = response == null ? null : response.path("id").asText(null);
+            if (resolvedId == null || resolvedId.isBlank()) {
+                return null;
+            }
+            collectionId = resolvedId;
+            return resolvedId;
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
