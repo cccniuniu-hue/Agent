@@ -237,6 +237,8 @@ public class MindBridgeProperties {
         private String apiKey = "";
         /** 文档要求的默认 embedding 模型。 */
         private String model = "text-embedding-3-small";
+        /** 请求与响应必须使用的 embedding 维度。 */
+        private int dimensions = 512;
 
         public String getBaseUrl() {
             return baseUrl;
@@ -260,6 +262,14 @@ public class MindBridgeProperties {
 
         public void setModel(String model) {
             this.model = model;
+        }
+
+        public int getDimensions() {
+            return dimensions;
+        }
+
+        public void setDimensions(int dimensions) {
+            this.dimensions = dimensions;
         }
     }
 

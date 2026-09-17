@@ -201,6 +201,7 @@ docker compose down
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama 模型名 |
 | `OPENAI_API_KEY` | 空 | OpenAI 密钥 |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI 模型名 |
+| `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_DIMENSIONS` | `text-embedding-3-small` / `512` | Embedding 模型与输出维度 |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 见配置文件 | 数据库连接 |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis 连接 |
 | `USE_CHROMA` | `true` | 是否使用 Chroma 知识检索 |

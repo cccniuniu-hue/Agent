@@ -111,6 +111,7 @@ mindbridge:
     base-url: ${OPENAI_BASE_URL:https://api.openai.com}
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:512}
   knowledge:
     top-k: ${RAG_TOP_K:4}
     reranker-enabled: ${RAG_RERANKER_ENABLED:true}

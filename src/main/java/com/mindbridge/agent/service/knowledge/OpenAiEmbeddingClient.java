@@ -30,12 +30,17 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
     @Override
     public List<Double> embed(String text) {
         // API Key 为空时直接返回空向量，让 RAG 使用本地检索兜底。
-        if (properties.getEmbedding().getApiKey().isBlank() || text == null || text.isBlank()) {
+        int expectedDimensions = properties.getEmbedding().getDimensions();
+        if (properties.getEmbedding().getApiKey().isBlank()
+                || text == null
+                || text.isBlank()
+                || expectedDimensions < 1) {
             return List.of();
         }
         Map<String, Object> body = Map.of(
                 "model", properties.getEmbedding().getModel(),
                 "input", text,
+                "dimensions", expectedDimensions,
                 "encoding_format", "float"
         );
         JsonNode response = webClient.post()
@@ -48,7 +53,7 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
                 ? null
                 : response.path("data").path(0).path("embedding");
         // 服务端响应异常时不抛给业务层，返回空结果交给 KnowledgeService 回退。
-        if (embedding == null || !embedding.isArray()) {
+        if (embedding == null || !embedding.isArray() || embedding.size() != expectedDimensions) {
             return List.of();
         }
         List<Double> values = new ArrayList<>(embedding.size());

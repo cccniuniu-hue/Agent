@@ -224,6 +224,7 @@ POST {OPENAI_BASE_URL}/v1/embeddings
 {
   "model": "text-embedding-3-small",
   "input": "文本内容",
+  "dimensions": 512,
   "encoding_format": "float"
 }
 ```
@@ -235,6 +236,7 @@ POST {OPENAI_BASE_URL}/v1/embeddings
 | `OPENAI_BASE_URL` | `https://api.openai.com` |
 | `OPENAI_API_KEY` | 空 |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` |
+| `OPENAI_EMBEDDING_DIMENSIONS` | `512` |
 
 如果 `OPENAI_API_KEY` 为空，`embed()` 直接返回空列表。这样设计的结果是：
 
@@ -243,7 +245,7 @@ POST {OPENAI_BASE_URL}/v1/embeddings
 - 本地向量检索不会产生结果。
 - 系统仍可以通过 BM25 做本地检索。
 
-如果 embedding 服务异常，`KnowledgeService.safeEmbedding()` 会捕获异常并返回空列表，不让向量化失败影响知识库可用性。
+客户端会校验响应向量长度是否等于配置维度。维度不一致时返回空列表；如果 embedding 服务异常，`KnowledgeService.safeEmbedding()` 也会捕获异常并返回空列表，不让向量化失败影响知识库可用性。
 
 ### 7.3 本地向量兜底
 
@@ -733,6 +735,7 @@ aiClient.stream(prepared.messages())
 | `OPENAI_BASE_URL` | `https://api.openai.com` | OpenAI 兼容接口地址 |
 | `OPENAI_API_KEY` | 空 | embedding API key，空则禁用本地向量 embedding |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | embedding 模型 |
+| `OPENAI_EMBEDDING_DIMENSIONS` | `512` | 请求和校验的 embedding 输出维度 |
 
 注意：`OPENAI_API_KEY` 同时也会影响 OpenAI 聊天 provider。如果项目使用 Ollama 生成模型，但想用 OpenAI embedding，也可以保持 `AI_PROVIDER=ollama`，同时设置 `OPENAI_API_KEY`。
 
