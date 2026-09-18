@@ -64,9 +64,15 @@ public class KnowledgeService {
             chunk.setSourceIndex(index);
             chunk.setContent(chunks.get(index));
             // 有 embedding 配置时写入向量；没有配置时保持为空，检索会自动走本地兜底。
-            chunk.setEmbeddingJson(serializeEmbedding(safeEmbedding(chunks.get(index))));
+            List<Double> embedding = safeEmbedding(chunks.get(index));
+            chunk.setEmbeddingJson(serializeEmbedding(embedding));
+            String embeddingModel = embedding.isEmpty() ? "" : embeddingClient.modelName();
+            if (embeddingModel != null && !embeddingModel.isBlank()) {
+                chunk.setEmbeddingModel(embeddingModel);
+                chunk.setEmbeddingDimensions(embedding.size());
+            }
             KnowledgeChunk saved = knowledgeChunkRepository.save(chunk);
-            chromaGateway.mirror(saved);
+            chromaGateway.mirror(saved, embedding);
         }
         return chunks.size();
     }
@@ -86,19 +92,30 @@ public class KnowledgeService {
     }
 
     private List<SearchResult> retrieveByVector(String query, int limit, List<KnowledgeChunk> chunks) {
-        List<SearchResult> chromaResults = chromaGateway.query(query, limit);
-        if (!chromaResults.isEmpty()) {
-            return chromaResults;
-        }
-        return retrieveByEmbedding(query, limit, chunks);
-    }
-
-    private List<SearchResult> retrieveByEmbedding(String query, int topK, List<KnowledgeChunk> chunks) {
         List<Double> queryEmbedding = safeEmbedding(query);
         if (queryEmbedding.isEmpty()) {
             return List.of();
         }
+        String embeddingModel = embeddingClient.modelName();
+        if (embeddingModel == null || embeddingModel.isBlank()) {
+            return List.of();
+        }
+        List<SearchResult> chromaResults = chromaGateway.query(queryEmbedding, embeddingModel, limit);
+        if (!chromaResults.isEmpty()) {
+            return chromaResults;
+        }
+        return retrieveByEmbedding(queryEmbedding, embeddingModel, limit, chunks);
+    }
+
+    private List<SearchResult> retrieveByEmbedding(
+            List<Double> queryEmbedding,
+            String embeddingModel,
+            int topK,
+            List<KnowledgeChunk> chunks
+    ) {
         return chunks.stream()
+                .filter(chunk -> embeddingModel.equals(chunk.getEmbeddingModel()))
+                .filter(chunk -> Integer.valueOf(queryEmbedding.size()).equals(chunk.getEmbeddingDimensions()))
                 .map(chunk -> new SearchResult(
                         chunk.getId(),
                         chunk.getSource(),

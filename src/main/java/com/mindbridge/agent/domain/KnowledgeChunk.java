@@ -35,6 +35,11 @@ public class KnowledgeChunk {
     @Lob
     private String embeddingJson;
 
+    @Column(length = 120)
+    private String embeddingModel;
+
+    private Integer embeddingDimensions;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -72,6 +77,22 @@ public class KnowledgeChunk {
 
     public void setEmbeddingJson(String embeddingJson) {
         this.embeddingJson = embeddingJson;
+    }
+
+    public String getEmbeddingModel() {
+        return embeddingModel;
+    }
+
+    public void setEmbeddingModel(String embeddingModel) {
+        this.embeddingModel = embeddingModel;
+    }
+
+    public Integer getEmbeddingDimensions() {
+        return embeddingDimensions;
+    }
+
+    public void setEmbeddingDimensions(Integer embeddingDimensions) {
+        this.embeddingDimensions = embeddingDimensions;
     }
 
     public Instant getCreatedAt() {

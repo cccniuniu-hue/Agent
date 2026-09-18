@@ -29,8 +29,14 @@ public class ChromaGateway {
         this.webClient = webClientBuilder.baseUrl(properties.getKnowledge().getChromaBaseUrl()).build();
     }
 
-    public void mirror(KnowledgeChunk chunk) {
-        if (!properties.getKnowledge().isUseChroma()) {
+    public void mirror(KnowledgeChunk chunk, List<Double> embedding) {
+        if (!properties.getKnowledge().isUseChroma()
+                || embedding == null
+                || embedding.isEmpty()
+                || chunk.getEmbeddingModel() == null
+                || chunk.getEmbeddingModel().isBlank()
+                || chunk.getEmbeddingDimensions() == null
+                || chunk.getEmbeddingDimensions() != embedding.size()) {
             return;
         }
         // 本地数据库仍是主存储；Chroma 只是可选检索加速层。
@@ -41,9 +47,12 @@ public class ChromaGateway {
         Map<String, Object> body = Map.of(
                 "ids", List.of(String.valueOf(chunk.getId())),
                 "documents", List.of(chunk.getContent()),
+                "embeddings", List.of(embedding),
                 "metadatas", List.of(Map.of(
                         "source", chunk.getSource(),
-                        "sourceIndex", chunk.getSourceIndex()))
+                        "sourceIndex", chunk.getSourceIndex(),
+                        "embeddingModel", chunk.getEmbeddingModel(),
+                        "embeddingDimensions", chunk.getEmbeddingDimensions()))
         );
         webClient.post()
                 .uri(COLLECTIONS_PATH + "/{collectionId}/upsert",
@@ -57,8 +66,12 @@ public class ChromaGateway {
                 .block();
     }
 
-    public List<SearchResult> query(String text, int topK) {
-        if (!properties.getKnowledge().isUseChroma()) {
+    public List<SearchResult> query(List<Double> embedding, String embeddingModel, int topK) {
+        if (!properties.getKnowledge().isUseChroma()
+                || embedding == null
+                || embedding.isEmpty()
+                || embeddingModel == null
+                || embeddingModel.isBlank()) {
             return List.of();
         }
         String ensuredCollectionId = ensureCollection();
@@ -66,8 +79,11 @@ public class ChromaGateway {
             return List.of();
         }
         Map<String, Object> body = Map.of(
-                "query_texts", List.of(text),
+                "query_embeddings", List.of(embedding),
                 "n_results", topK,
+                "where", Map.of("$and", List.of(
+                        Map.of("embeddingModel", embeddingModel),
+                        Map.of("embeddingDimensions", embedding.size()))),
                 "include", List.of("documents", "metadatas", "distances")
         );
         try {

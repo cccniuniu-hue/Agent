@@ -59,10 +59,10 @@ flowchart LR
 | 后端框架 | Java 17、Spring Boot 3.3.5 | 提供服务启动、配置绑定、依赖注入、事务和 REST 接口 |
 | 模型接入 | Spring AI 1.0.0、Ollama、OpenAI 兼容接口 | 接入本地 Qwen/Ollama 生成模型，也可切换 OpenAI provider |
 | 流式输出 | Spring WebFlux、Reactor、SSE | 将最终模型回答以 token 流返回前端 |
-| 主存储 | H2、MySQL、Spring Data JPA | 保存知识切块、embeddingJson、会话、报告和 Agent trace |
+| 主存储 | H2、MySQL、Spring Data JPA | 保存知识切块、embeddingJson、embedding 版本、会话、报告和 Agent trace |
 | 短期记忆 | Redis、Spring Data Redis | 保存最近对话，辅助 MemoryAgent 准备上下文 |
 | 向量索引 | Chroma | 可选保存知识库和用户画像的语义索引 |
-| 向量化 | OpenAI 兼容 `/v1/embeddings` | 生成本地 `embeddingJson`，用于本地向量相似度兜底 |
+| 向量化 | OpenAI 兼容 `/v1/embeddings` | 生成一份向量，同时用于 Chroma 与本地向量相似度兜底 |
 | 关键词检索 | 自研 BM25 | 无 embedding 或 Chroma 不可用时仍可检索知识 |
 | 文件解析 | Apache PDFBox | 从管理员上传的 PDF 中抽取文本 |
 | 质量评测 | RAGAS、LangChain OpenAI/Ollama wrappers | 离线评测上下文精确率、召回、忠实度和回答相关性 |
@@ -71,7 +71,7 @@ flowchart LR
 
 | 模块 | 文件 | 职责 |
 | --- | --- | --- |
-| 知识切块实体 | `domain/KnowledgeChunk.java` | 保存 source、sourceIndex、content、embeddingJson 和 createdAt |
+| 知识切块实体 | `domain/KnowledgeChunk.java` | 保存 source、sourceIndex、content、embeddingJson、模型、维度和 createdAt |
 | 知识库仓储 | `repository/KnowledgeChunkRepository.java` | 按 source 删除、计数、按 sourceIndex 取邻居切块 |
 | 入库核心 | `service/knowledge/KnowledgeService.java` | 切块、embedding、落库、Chroma 镜像、混合检索、上下文扩展 |
 | 切块器 | `service/knowledge/KnowledgeChunker.java` | 按自然边界和 overlap 切分文本 |
@@ -191,6 +191,8 @@ curl -u admin:admin123 \
 | `sourceIndex` | 同一 source 内的切块顺序 | 检索命中后取前后邻居 |
 | `content` | 切块文本 | BM25、prompt 注入、Chroma 文档 |
 | `embeddingJson` | 向量 JSON | 本地向量相似度兜底 |
+| `embeddingModel` | embedding 模型名 | 标识生成当前向量的模型版本 |
+| `embeddingDimensions` | 向量维度 | 防止查询向量和历史向量维度混用 |
 | `createdAt` | 创建时间 | 后台排序和审计 |
 
 设计上，H2/MySQL 是主存储。Chroma 中的内容可以重建，因此不是强依赖。
@@ -251,11 +253,11 @@ POST {OPENAI_BASE_URL}/v1/embeddings
 
 当 Chroma 没有返回结果时，`KnowledgeService.retrieveByEmbedding()` 会尝试：
 
-1. 对 query 调用 `EmbeddingClient.embed(query)`。
-2. 解析每个 chunk 的 `embeddingJson`。
-3. 计算 cosine similarity。
-4. 过滤分数 `> 0.0` 的结果。
-5. 按分数降序返回候选。
+1. 对 query 调用一次 `EmbeddingClient.embed(query)`。
+2. 先把同一查询向量作为 `query_embeddings` 交给 Chroma。
+3. Chroma 无结果或不可用时，筛选模型名和维度相同的本地 chunk。
+4. 解析对应 chunk 的 `embeddingJson` 并计算 cosine similarity。
+5. 过滤分数 `> 0.0` 的结果，按分数降序返回候选。
 
 cosine 公式：
 
@@ -292,27 +294,36 @@ chroma:
 
 ### 8.2 写入
 
-`KnowledgeService.ingest()` 保存 chunk 后调用 `chromaGateway.mirror(saved)`。请求体包含：
+`KnowledgeService.ingest()` 使用 `EmbeddingClient` 为每个 chunk 生成一次向量，保存 chunk 后调用 `chromaGateway.mirror(saved, embedding)`。请求体包含：
 
 - `ids`：chunk id。
 - `documents`：chunk 文本。
-- `metadatas`：`source` 和 `sourceIndex`。
+- `embeddings`：Java embedding 客户端生成的向量。
+- `metadatas`：`source`、`sourceIndex`、`embeddingModel` 和 `embeddingDimensions`。
 
 网关通过 Chroma v2 API 创建或获取 collection，缓存响应中的 collection UUID，后续使用该 UUID 调用 `upsert`、`query` 和 `delete`。创建失败时不缓存失败结果，下次请求会重新尝试。
 
-当前代码没有向 Chroma 显式传入 embedding 数组，而是传入 documents。也就是说，Chroma 侧的向量化行为取决于 Chroma 服务端默认或实际配置的 embedding function。与此同时，项目自己的 `embeddingJson` 仍保存在数据库里，用于本地向量兜底。
+数据库中的 `embeddingJson` 和 Chroma 中的 `embeddings` 来自同一次调用，不依赖 Chroma 服务端再次向量化。没有得到向量时只保存文本主数据，不向 Chroma 写入无向量记录。
 
 ### 8.3 查询
 
-`ChromaGateway.query(text, topK)` 请求：
+`ChromaGateway.query(embedding, embeddingModel, topK)` 请求：
 
 ```json
 {
-  "query_texts": ["学生问题或改写后的query"],
+  "query_embeddings": [[0.1, 0.2, 0.3]],
   "n_results": 4,
+  "where": {
+    "$and": [
+      {"embeddingModel": "text-embedding-3-small"},
+      {"embeddingDimensions": 512}
+    ]
+  },
   "include": ["documents", "metadatas", "distances"]
 }
 ```
+
+查询只生成一次向量。Chroma 查询和本地余弦降级复用这份向量，并通过模型名、维度过滤历史记录。
 
 结果解析时：
 
@@ -931,7 +942,7 @@ query=危机安全计划 自伤 即时危险; refined=true; retrieved=4
 - Chroma 服务没有启动。
 - collection 创建失败。
 - Chroma REST API 版本和当前路径不兼容。
-- Chroma 侧 embedding function 不可用。
+- embedding API 没有返回向量，或索引中的模型、维度版本与当前配置不一致。
 
 影响：
 
@@ -968,9 +979,9 @@ curl http://localhost:8000/api/v2/heartbeat
 
 检查：
 
-- 入库时和查询时是否使用同一个 embedding 模型。
-- `embeddingJson` 是否存在且维度一致。
-- Chroma 侧 embedding function 是否和本地 embedding 不一致。
+- 入库时和查询时配置的 embedding 模型与维度是否一致。
+- `embeddingJson`、`embeddingModel` 和 `embeddingDimensions` 是否存在。
+- Chroma 记录元数据中的模型、维度是否与当前配置一致。
 - 是否需要关闭 Chroma，仅测试本地 embedding 路线。
 
 ## 20. 调参建议
@@ -1028,7 +1039,7 @@ bm25 = 0.35
 
 1. 数据库检索会 `findAll()` 加载全部 chunk。知识库变大后需要分页、倒排索引或专门检索服务。
 2. BM25 tokenizer 是轻量实现，没有专业中文分词和同义词扩展。
-3. Chroma 写入 documents 而非显式 embeddings，Chroma 侧 embedding 模型可能和本地 `embeddingJson` 不一致。
+3. 更换 embedding 模型或维度后，旧索引需要重建，才能重新参与向量检索。
 4. 当前 reranker 使用项目现有 `AiClient` 对候选打分，不是独立 cross-encoder；低延迟和稳定性要求更高时可替换为专用 reranker 模型。
 5. 内置知识刷新只比较 chunk 数，不比较内容 hash。内容变化但切块数量不变时可能不会刷新。
 6. 最终回答默认不向学生展示引用来源。如果需要可解释引用，需要在前端和 prompt 中增加 citation 设计。

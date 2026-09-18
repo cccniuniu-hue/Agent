@@ -53,9 +53,12 @@ class ChromaGatewayTests {
         chunk.setSource("guide.md");
         chunk.setSourceIndex(3);
         chunk.setContent("支持性倾听与情绪识别");
+        chunk.setEmbeddingModel("text-embedding-test");
+        chunk.setEmbeddingDimensions(3);
+        List<Double> embedding = List.of(0.1, 0.2, 0.3);
 
-        gateway.mirror(chunk);
-        List<SearchResult> results = gateway.query("如何提供支持", 5);
+        gateway.mirror(chunk, embedding);
+        List<SearchResult> results = gateway.query(embedding, "text-embedding-test", 5);
         gateway.deleteSource("guide.md");
 
         assertThat(requests).extracting(CapturedRequest::method).containsOnly("POST");
@@ -72,11 +75,22 @@ class ChromaGatewayTests {
         JsonNode upsertBody = objectMapper.readTree(requests.get(1).body());
         assertThat(upsertBody.path("ids").path(0).asText()).isEqualTo("42");
         assertThat(upsertBody.path("documents").path(0).asText()).isEqualTo("支持性倾听与情绪识别");
+        assertThat(upsertBody.path("embeddings").path(0)).hasSize(3);
+        assertThat(upsertBody.path("embeddings").path(0).path(1).asDouble()).isEqualTo(0.2);
         assertThat(upsertBody.path("metadatas").path(0).path("source").asText()).isEqualTo("guide.md");
+        assertThat(upsertBody.path("metadatas").path(0).path("embeddingModel").asText())
+                .isEqualTo("text-embedding-test");
+        assertThat(upsertBody.path("metadatas").path(0).path("embeddingDimensions").asInt()).isEqualTo(3);
 
         JsonNode queryBody = objectMapper.readTree(requests.get(2).body());
-        assertThat(queryBody.path("query_texts").path(0).asText()).isEqualTo("如何提供支持");
+        assertThat(queryBody.has("query_texts")).isFalse();
+        assertThat(queryBody.path("query_embeddings").path(0)).hasSize(3);
+        assertThat(queryBody.path("query_embeddings").path(0).path(2).asDouble()).isEqualTo(0.3);
         assertThat(queryBody.path("n_results").asInt()).isEqualTo(5);
+        assertThat(queryBody.path("where").path("$and").path(0).path("embeddingModel").asText())
+                .isEqualTo("text-embedding-test");
+        assertThat(queryBody.path("where").path("$and").path(1).path("embeddingDimensions").asInt())
+                .isEqualTo(3);
 
         JsonNode deleteBody = objectMapper.readTree(requests.get(3).body());
         assertThat(deleteBody.path("where").path("source").asText()).isEqualTo("guide.md");
@@ -86,6 +100,16 @@ class ChromaGatewayTests {
             assertThat(result.content()).isEqualTo("支持性倾听与情绪识别");
             assertThat(result.score()).isEqualTo(0.8);
         });
+    }
+
+    @Test
+    void skipsChromaRequestsWhenEmbeddingIsUnavailable() {
+        KnowledgeChunk chunk = new KnowledgeChunk();
+
+        gateway.mirror(chunk, List.of());
+        assertThat(gateway.query(List.of(), "text-embedding-test", 5)).isEmpty();
+
+        assertThat(requests).isEmpty();
     }
 
     private void handleRequest(HttpExchange exchange) throws IOException {
