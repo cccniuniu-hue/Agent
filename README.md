@@ -5,7 +5,7 @@
 - 动态路由 RAG：先识别 `CHAT / CONSULT / RISK`，闲聊不查知识库，咨询与风险消息才进入检索增强。
 - SSE 流式输出：`/api/chat/stream` 返回 `text/event-stream`，适合前端做打字机效果。
 - 后台心理状态识别：记录情绪标签、情绪分数、风险等级和置信度，但学生端不展示评估结果。
-- 用户画像记忆：从对话中抽取稳定偏好、沟通方式和支持需求，MySQL 保存可审计记录，Chroma 负责语义召回。
+- 用户画像记忆：从对话中抽取稳定偏好、沟通方式和支持需求，MySQL 保存可审计记录；显式开启画像向量化后可用 Chroma 语义召回。
 - 数据闭环：咨询/风险消息写入数据库，高风险先写 Excel，再触发邮件或 HTTP MCP 预警。
 - Spring AI 模型接入：默认通过 `ollama` 调用项目模型，也可按需切到 `openai`。
 - 可替换知识库：默认本地轻量检索，可打开 Chroma 镜像和查询。
@@ -201,7 +201,9 @@ docker compose down
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama 模型名 |
 | `OPENAI_API_KEY` | 空 | OpenAI 密钥 |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI 模型名 |
-| `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_DIMENSIONS` | `text-embedding-3-small` / `512` | Embedding 模型与输出维度 |
+| `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_DIMENSIONS` | `text-embedding-3-small` / `512` | 知识库 Embedding 模型与输出维度 |
+| `MEMORY_EMBEDDING_ENABLED` | `false` | 显式允许画像文本向量化；默认不发送画像文本到 Embedding 服务或 Chroma |
+| `MEMORY_EMBEDDING_API_KEY` | 空 | 画像专用密钥，不复用 `OPENAI_API_KEY` |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 见配置文件 | 数据库连接 |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis 连接 |
 | `USE_CHROMA` | `true` | 是否使用 Chroma 知识检索 |
@@ -355,10 +357,10 @@ ALERT_MAIL_RECIPIENTS=counselor@example.com \
 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 ```
 
-默认会使用两个 Chroma collection：
+配置了相应向量化服务后可使用两个 Chroma collection：
 
 - `mindbridge_knowledge`：RAG 知识库切块检索。
-- `mindbridge_user_memory`：用户画像/偏好长期语义记忆召回。
+- `mindbridge_user_memory`：用户画像/偏好长期语义记忆召回；默认关闭画像向量化，改用关系库最近记忆召回。显式开启需设置 `MEMORY_EMBEDDING_ENABLED=true` 和独立的 `MEMORY_EMBEDDING_API_KEY`，画像文本随后会发送到所配置的 Embedding 服务及 Chroma。
 
 Mailpit 管理页面：`http://localhost:8025`
 

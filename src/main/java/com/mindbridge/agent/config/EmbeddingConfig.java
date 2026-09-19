@@ -2,6 +2,8 @@ package com.mindbridge.agent.config;
 
 import com.mindbridge.agent.service.knowledge.EmbeddingClient;
 import com.mindbridge.agent.service.knowledge.OpenAiEmbeddingClient;
+import com.mindbridge.agent.service.memory.ConfiguredMemoryEmbeddingClient;
+import com.mindbridge.agent.service.memory.MemoryEmbeddingClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -21,5 +23,13 @@ public class EmbeddingConfig {
             WebClient.Builder webClientBuilder
     ) {
         return new OpenAiEmbeddingClient(properties, webClientBuilder);
+    }
+
+    @Bean
+    public MemoryEmbeddingClient memoryEmbeddingClient(
+            MindBridgeProperties properties,
+            WebClient.Builder webClientBuilder
+    ) {
+        return new ConfiguredMemoryEmbeddingClient(properties, webClientBuilder);
     }
 }

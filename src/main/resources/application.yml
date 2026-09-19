@@ -102,6 +102,12 @@ mindbridge:
     short-memory-ttl-hours: ${CHAT_SHORT_MEMORY_TTL_HOURS:24}
   memory:
     use-chroma: ${MEMORY_USE_CHROMA:${USE_CHROMA:true}}
+    embedding:
+      enabled: ${MEMORY_EMBEDDING_ENABLED:false}
+      base-url: ${MEMORY_EMBEDDING_BASE_URL:https://api.openai.com}
+      api-key: ${MEMORY_EMBEDDING_API_KEY:}
+      model: ${MEMORY_EMBEDDING_MODEL:text-embedding-3-small}
+      dimensions: ${MEMORY_EMBEDDING_DIMENSIONS:512}
     chroma-base-url: ${MEMORY_CHROMA_BASE_URL:${CHROMA_BASE_URL:http://localhost:8000}}
     chroma-tenant: ${MEMORY_CHROMA_TENANT:${CHROMA_TENANT:default_tenant}}
     chroma-database: ${MEMORY_CHROMA_DATABASE:${CHROMA_DATABASE:default_database}}

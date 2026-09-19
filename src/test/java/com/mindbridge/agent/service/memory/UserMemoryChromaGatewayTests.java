@@ -30,6 +30,7 @@ class UserMemoryChromaGatewayTests {
     private final List<CapturedRequest> requests = new CopyOnWriteArrayList<>();
     private HttpServer server;
     private UserMemoryChromaGateway gateway;
+    private MindBridgeProperties properties;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -37,11 +38,11 @@ class UserMemoryChromaGatewayTests {
         server.createContext("/", this::handleRequest);
         server.start();
 
-        MindBridgeProperties properties = new MindBridgeProperties();
+        properties = new MindBridgeProperties();
         properties.getMemory().setUseChroma(true);
         properties.getMemory().setChromaBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
         properties.getMemory().setChromaCollection("mindbridge_user_memory");
-        gateway = new UserMemoryChromaGateway(properties, WebClient.builder());
+        gateway = new UserMemoryChromaGateway(properties, WebClient.builder(), new TestMemoryEmbeddingClient());
     }
 
     @AfterEach
@@ -78,13 +79,21 @@ class UserMemoryChromaGatewayTests {
 
         JsonNode upsertBody = objectMapper.readTree(requests.get(1).body());
         assertThat(upsertBody.path("ids").path(0).asText()).isEqualTo("memory:23");
+        assertThat(upsertBody.path("embeddings").path(0).path(1).asDouble()).isEqualTo(0.2);
         assertThat(upsertBody.path("metadatas").path(0).path("memoryId").asText()).isEqualTo("23");
         assertThat(upsertBody.path("metadatas").path(0).path("userId").asText()).isEqualTo("7");
+        assertThat(upsertBody.path("metadatas").path(0).path("embeddingModel").asText()).isEqualTo("private-test-model");
+        assertThat(upsertBody.path("metadatas").path(0).path("embeddingDimensions").asInt()).isEqualTo(3);
 
         JsonNode queryBody = objectMapper.readTree(requests.get(2).body());
-        assertThat(queryBody.path("query_texts").path(0).asText()).isEqualTo("最近复习压力很大");
+        assertThat(queryBody.has("query_texts")).isFalse();
+        assertThat(queryBody.path("query_embeddings").path(0).path(2).asDouble()).isEqualTo(0.3);
         assertThat(queryBody.path("n_results").asInt()).isEqualTo(4);
-        assertThat(queryBody.path("where").path("userId").asText()).isEqualTo("7");
+        assertThat(queryBody.path("where").path("$and").path(0).path("userId").asText()).isEqualTo("7");
+        assertThat(queryBody.path("where").path("$and").path(1).path("embeddingModel").asText())
+                .isEqualTo("private-test-model");
+        assertThat(queryBody.path("where").path("$and").path(2).path("embeddingDimensions").asInt())
+                .isEqualTo(3);
 
         JsonNode deleteBody = objectMapper.readTree(requests.get(3).body());
         assertThat(deleteBody.path("ids").path(0).asText()).isEqualTo("memory:23");
@@ -92,6 +101,50 @@ class UserMemoryChromaGatewayTests {
             assertThat(match.memoryId()).isEqualTo(23L);
             assertThat(match.score()).isEqualTo(0.85);
         });
+    }
+
+    @Test
+    void defaultConfigurationNeverSendsProfileTextToChroma() {
+        properties.getEmbedding().setApiKey("knowledge-only-key");
+        UserAccount user = new UserAccount();
+        ReflectionTestUtils.setField(user, "id", 7L);
+        UserMemoryItem item = new UserMemoryItem();
+        ReflectionTestUtils.setField(item, "id", 23L);
+        item.setUser(user);
+        item.setType(UserMemoryType.SUPPORT_NEED);
+        item.setSummary("敏感画像内容");
+        gateway = new UserMemoryChromaGateway(properties, WebClient.builder(),
+                new ConfiguredMemoryEmbeddingClient(properties, WebClient.builder()));
+
+        gateway.mirror(item);
+        assertThat(gateway.query(7L, "敏感查询", 4)).isEmpty();
+        assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void embeddingFailureKeepsProfileIndexOptional() {
+        UserAccount user = new UserAccount();
+        ReflectionTestUtils.setField(user, "id", 7L);
+        UserMemoryItem item = new UserMemoryItem();
+        ReflectionTestUtils.setField(item, "id", 23L);
+        item.setUser(user);
+        item.setType(UserMemoryType.SUPPORT_NEED);
+        item.setSummary("画像内容");
+        gateway = new UserMemoryChromaGateway(properties, WebClient.builder(), new MemoryEmbeddingClient() {
+            @Override
+            public List<Double> embed(String text) {
+                throw new IllegalStateException("embedding unavailable");
+            }
+
+            @Override
+            public String modelName() {
+                return "private-test-model";
+            }
+        });
+
+        gateway.mirror(item);
+        assertThat(gateway.query(7L, "画像查询", 4)).isEmpty();
+        assertThat(requests).isEmpty();
     }
 
     private void handleRequest(HttpExchange exchange) throws IOException {
@@ -117,5 +170,17 @@ class UserMemoryChromaGatewayTests {
     }
 
     private record CapturedRequest(String method, String path, String body) {
+    }
+
+    private static class TestMemoryEmbeddingClient implements MemoryEmbeddingClient {
+        @Override
+        public List<Double> embed(String text) {
+            return List.of(0.1, 0.2, 0.3);
+        }
+
+        @Override
+        public String modelName() {
+            return "private-test-model";
+        }
     }
 }

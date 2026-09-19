@@ -25,15 +25,27 @@ public class UserMemoryChromaGateway {
 
     private final MindBridgeProperties properties;
     private final WebClient webClient;
+    private final MemoryEmbeddingClient embeddingClient;
     private volatile String collectionId;
 
-    public UserMemoryChromaGateway(MindBridgeProperties properties, WebClient.Builder webClientBuilder) {
+    public UserMemoryChromaGateway(
+            MindBridgeProperties properties,
+            WebClient.Builder webClientBuilder,
+            MemoryEmbeddingClient embeddingClient
+    ) {
         this.properties = properties;
         this.webClient = webClientBuilder.baseUrl(properties.getMemory().getChromaBaseUrl()).build();
+        this.embeddingClient = embeddingClient;
     }
 
     public void mirror(UserMemoryItem item) {
         if (!properties.getMemory().isUseChroma() || item.getId() == null) {
+            return;
+        }
+        String text = document(item);
+        List<Double> embedding = safeEmbedding(text);
+        String model = embeddingClient.modelName();
+        if (embedding == null || embedding.isEmpty() || model == null || model.isBlank()) {
             return;
         }
         String ensuredCollectionId = ensureCollection();
@@ -42,8 +54,9 @@ public class UserMemoryChromaGateway {
         }
         Map<String, Object> body = Map.of(
                 "ids", List.of(chromaId(item.getId())),
-                "documents", List.of(document(item)),
-                "metadatas", List.of(metadata(item))
+                "documents", List.of(text),
+                "embeddings", List.of(embedding),
+                "metadatas", List.of(metadata(item, model, embedding.size()))
         );
         webClient.post()
                 .uri(COLLECTIONS_PATH + "/{collectionId}/upsert",
@@ -61,14 +74,22 @@ public class UserMemoryChromaGateway {
         if (!properties.getMemory().isUseChroma() || userId == null || text == null || text.isBlank()) {
             return List.of();
         }
+        List<Double> embedding = safeEmbedding(text);
+        String model = embeddingClient.modelName();
+        if (embedding == null || embedding.isEmpty() || model == null || model.isBlank()) {
+            return List.of();
+        }
         String ensuredCollectionId = ensureCollection();
         if (ensuredCollectionId == null) {
             return List.of();
         }
         Map<String, Object> body = Map.of(
-                "query_texts", List.of(text),
+                "query_embeddings", List.of(embedding),
                 "n_results", Math.max(1, topK),
-                "where", Map.of("userId", String.valueOf(userId)),
+                "where", Map.of("$and", List.of(
+                        Map.of("userId", String.valueOf(userId)),
+                        Map.of("embeddingModel", model),
+                        Map.of("embeddingDimensions", embedding.size()))),
                 "include", List.of("metadatas", "distances")
         );
         try {
@@ -124,11 +145,13 @@ public class UserMemoryChromaGateway {
         return matches;
     }
 
-    private Map<String, Object> metadata(UserMemoryItem item) {
+    private Map<String, Object> metadata(UserMemoryItem item, String model, int dimensions) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("memoryId", String.valueOf(item.getId()));
         metadata.put("userId", String.valueOf(item.getUser().getId()));
         metadata.put("type", item.getType().name());
+        metadata.put("embeddingModel", model);
+        metadata.put("embeddingDimensions", dimensions);
         ChatSession session = item.getSourceSession();
         if (session != null && session.getPublicId() != null) {
             metadata.put("sourceSessionId", session.getPublicId());
@@ -141,6 +164,14 @@ public class UserMemoryChromaGateway {
                 ? ""
                 : "\n证据：" + item.getEvidence();
         return "%s：%s%s".formatted(item.getType().name(), item.getSummary(), evidence);
+    }
+
+    private List<Double> safeEmbedding(String text) {
+        try {
+            return embeddingClient.embed(text);
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 
     private String chromaId(Long memoryId) {

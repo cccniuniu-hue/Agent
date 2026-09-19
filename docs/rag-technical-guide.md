@@ -717,12 +717,14 @@ aiClient.stream(prepared.messages())
 画像召回流程：
 
 1. 每轮对话后，`UserProfileMemoryService.rememberUserInput()` 尝试抽取长期记忆候选。
-2. 记忆保存到数据库，并可镜像到 Chroma。
-3. 网关通过 Chroma v2 API 获取 collection UUID，使用 `upsert` 写入；下一轮对话中，`profileBrief(user, currentInput)` 用当前输入召回相关画像。
-4. 如果 Chroma 不可用，则回退到最近更新的 12 条用户记忆。
+2. 记忆保存到数据库；默认不对画像做外部向量化，也不向 Chroma 写入画像文本。
+3. 只有显式启用画像专用 embedding 并提供专用密钥时，网关才生成向量，通过 Chroma v2 API 使用 `embeddings` 写入；下一轮以 `query_embeddings` 召回相关画像。
+4. 如果画像向量化未启用或 Chroma 不可用，则回退到最近更新的 12 条用户记忆。
 5. MemoryAgent 将画像摘要和短期历史摘要合并，交给后续 Agent。
 
-查询请求始终携带当前账号的 `userId` 元数据条件，避免返回其他用户的画像。用户画像召回不是公共知识检索，而是个性化上下文检索。
+Chroma 查询同时过滤当前账号的 `userId`、画像 embedding 模型和维度。用户画像召回不是公共知识检索，而是个性化上下文检索。显式开启后，画像文本会发送到 `MEMORY_EMBEDDING_BASE_URL` 和 `MEMORY_CHROMA_BASE_URL`；应选择可信服务地址。
+
+已有旧版画像 Chroma 记录缺少显式向量与版本元数据，不会被新查询命中；需要重建画像索引后才能参与语义召回。
 
 ## 16. 配置说明
 
@@ -760,6 +762,11 @@ aiClient.stream(prepared.messages())
 | `MEMORY_CHROMA_DATABASE` | `${CHROMA_DATABASE:default_database}` | 用户画像所在 Chroma 数据库 |
 | `MEMORY_CHROMA_COLLECTION` | `mindbridge_user_memory` | 用户画像 collection |
 | `MEMORY_TOP_K` | `6` | 每轮召回画像数量 |
+| `MEMORY_EMBEDDING_ENABLED` | `false` | 默认禁止画像文本向量化与 Chroma 镜像 |
+| `MEMORY_EMBEDDING_BASE_URL` | `https://api.openai.com` | 显式启用后使用的独立 Embedding 服务地址 |
+| `MEMORY_EMBEDDING_API_KEY` | 空 | 画像专用 API Key，不读取知识库的 `OPENAI_API_KEY` |
+| `MEMORY_EMBEDDING_MODEL` | `text-embedding-3-small` | 画像向量模型 |
+| `MEMORY_EMBEDDING_DIMENSIONS` | `512` | 画像向量请求和响应维度 |
 
 ### 16.4 RAG 评测
 
@@ -799,10 +806,10 @@ MEMORY_USE_CHROMA=true \
 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 ```
 
-默认两个 Chroma collection：
+配置对应向量化服务后可使用两个 Chroma collection：
 
 - `mindbridge_knowledge`：知识库 RAG。
-- `mindbridge_user_memory`：用户画像长期记忆。
+- `mindbridge_user_memory`：用户画像长期记忆，默认关闭画像向量化。
 
 ## 18. RAG 评测
 
